@@ -1,0 +1,686 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Tactile Magic 8-Ball</title>
+    <style>
+        :root {
+            --ball-size: 300px;
+            --bg-color: #0d1117;
+            --panel-bg: rgba(13, 17, 23, 0.95);
+            --accent: #4a86e8;
+        }
+
+        body {
+            margin: 0;
+            overflow: hidden;
+            background-color: var(--bg-color);
+            background-image: radial-gradient(circle at 50% 50%, #1a2332 0%, #000 100%);
+            font-family: 'Courier New', Courier, monospace;
+            height: 100vh;
+            cursor: grab;
+            color: white;
+        }
+
+        body.dragging {
+            cursor: grabbing;
+        }
+
+        /* 3D Scene Setup */
+        #scene {
+            width: 100vw;
+            height: 100vh;
+            perspective: 1000px;
+            position: relative;
+        }
+
+        #magic-ball {
+            width: var(--ball-size);
+            height: var(--ball-size);
+            position: absolute;
+            left: 50%;
+            top: 50%;
+            transform: translate(-50%, -50%);
+            transform-style: preserve-3d;
+            border-radius: 50%;
+            box-shadow: 
+                inset -20px -20px 50px rgba(0,0,0,0.9),
+                inset 10px 10px 30px rgba(255,255,255,0.4),
+                0 20px 50px rgba(0,0,0,0.8);
+            transition: left 0.5s ease-out, top 0.5s ease-out, transform 0.8s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+            will-change: transform, left, top;
+        }
+
+        #magic-ball.dragging {
+            transition: none;
+            transform: translate(-50%, -50%) scale(1.05);
+            box-shadow: 
+                inset -20px -20px 50px rgba(0,0,0,0.9),
+                inset 10px 10px 30px rgba(255,255,255,0.4),
+                0 40px 60px rgba(0,0,0,0.6);
+        }
+
+        #magic-ball.flipped {
+            transform: translate(-50%, -50%) rotateX(180deg);
+        }
+
+        .face {
+            position: absolute;
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            backface-visibility: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .front {
+            background: radial-gradient(circle at 30% 30%, #444, #050505 80%);
+        }
+
+        .front .eight-circle {
+            width: 140px;
+            height: 140px;
+            background: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-family: Arial, sans-serif;
+            font-size: 80px;
+            font-weight: bold;
+            color: #000;
+            box-shadow: inset 0 0 15px rgba(0,0,0,0.5);
+            user-select: none; 
+            pointer-events: none; 
+        }
+
+        .back {
+            background: radial-gradient(circle at 30% 30%, #222, #000 80%);
+            transform: rotateX(180deg);
+        }
+
+        .window {
+            width: 190px;
+            height: 190px;
+            border-radius: 50%;
+            border: 8px solid #0a0a0a;
+            background: radial-gradient(circle at 50% 50%, #001133 0%, #00040d 100%);
+            box-shadow: inset 0 20px 40px rgba(0,0,0,0.9), 0 0 0 2px #222;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .liquid {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: transform 2.5s cubic-bezier(0.1, 0.8, 0.2, 1), opacity 2s ease-in, filter 2.5s ease-out;
+            opacity: 0;
+            transform: scale(0.2) translateY(50px) rotateZ(-40deg);
+            filter: blur(10px) brightness(0.1);
+        }
+
+        #magic-ball.revealed .liquid {
+            opacity: 1;
+            transform: scale(1) translateY(10px) rotateZ(0deg);
+            filter: blur(0px) brightness(1);
+        }
+
+        .triangle {
+            width: 120px; /* Slightly wider for the absolute positioned text */
+            height: 120px; 
+            background-color: #1c4587;
+            clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
+            position: relative; /* Key change: Allow absolute positioning of children */
+            box-shadow: inset 0 0 20px #4a86e8;
+            filter: drop-shadow(0 0 10px #1155cc);
+        }
+
+        .answer-text {
+            color: #c9daf8;
+            text-transform: uppercase;
+            text-align: center;
+            width: 90px; 
+            line-height: 1.2;
+            text-shadow: 0 0 5px #fff;
+            opacity: 0;
+            transition: opacity 1s ease-in 1.5s; 
+            word-wrap: break-word;
+            
+            /* --- THE CENTROID FIX --- */
+            position: absolute;
+            top: 66%; /* Geometric center of mass for a triangle */
+            left: 50%;
+            transform: translate(-50%, -50%); /* Pins the exact center of the text block to the top/left coordinates */
+            margin: 0; /* Clear all old margins */
+        }
+
+        #magic-ball.revealed .answer-text {
+            opacity: 1;
+        }
+
+        /* --- UI OVERLAYS --- */
+        .ui-container {
+            position: absolute;
+            bottom: 30px;
+            width: 100%;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            pointer-events: none;
+        }
+
+        .instruction {
+            color: rgba(255,255,255,0.3);
+            user-select: none;
+            margin-right: 15px;
+        }
+
+        .cog-btn {
+            pointer-events: auto;
+            background: none;
+            border: none;
+            color: rgba(255,255,255,0.5);
+            font-size: 24px;
+            cursor: pointer;
+            transition: color 0.3s, transform 0.5s ease;
+        }
+
+        .cog-btn:hover {
+            color: #fff;
+            transform: rotate(90deg);
+        }
+
+        /* --- CONFIG PANEL --- */
+        #config-panel {
+            position: absolute;
+            top: 0;
+            right: -350px;
+            width: 350px;
+            height: 100vh;
+            background: var(--panel-bg);
+            border-left: 1px solid #333;
+            box-shadow: -10px 0 30px rgba(0,0,0,0.8);
+            transition: right 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+            z-index: 100;
+            display: flex;
+            flex-direction: column;
+            backdrop-filter: blur(10px);
+            font-family: Arial, sans-serif;
+            pointer-events: auto;
+            cursor: default;
+        }
+
+        #config-panel.open {
+            right: 0;
+        }
+
+        .panel-header {
+            padding: 20px;
+            border-bottom: 1px solid #333;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .panel-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--accent);
+        }
+
+        .close-btn {
+            background: none;
+            border: none;
+            color: #aaa;
+            font-size: 20px;
+            cursor: pointer;
+        }
+
+        .panel-content {
+            flex-grow: 1;
+            padding: 20px;
+            overflow-y: auto;
+        }
+
+        .panel-content::-webkit-scrollbar { width: 6px; }
+        .panel-content::-webkit-scrollbar-track { background: transparent; }
+        .panel-content::-webkit-scrollbar-thumb { background: #444; border-radius: 3px; }
+
+        .input-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .input-box {
+            background: #111;
+            border: 1px solid #333;
+            color: #fff;
+            padding: 8px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+            width: 100%;
+            box-sizing: border-box;
+            outline: none;
+        }
+
+        .input-box:focus {
+            border-color: var(--accent);
+        }
+
+        .controls-row {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 20px;
+        }
+
+        .btn {
+            flex: 1;
+            padding: 10px;
+            background: #222;
+            color: #fff;
+            border: 1px solid #444;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 12px;
+            transition: background 0.2s;
+        }
+
+        .btn:hover { background: #333; }
+        .btn.danger:hover { background: #5a1a1a; border-color: #ff4444; }
+
+        .templates-section {
+            border-top: 1px solid #333;
+            padding-top: 20px;
+        }
+
+        .templates-title {
+            font-size: 12px;
+            color: #aaa;
+            margin-bottom: 15px;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .templates-grid {
+            display: flex;
+            justify-content: space-between;
+        }
+
+        .template-slot {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .tmpl-number {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            font-weight: bold;
+            cursor: pointer;
+            transition: all 0.3s;
+            border: 2px solid #444;
+            color: #444;
+            background: transparent;
+        }
+
+        .tmpl-number.saved {
+            border-color: #00C851;
+            color: #00C851;
+            background: rgba(0, 200, 81, 0.1);
+        }
+
+        .tmpl-number.saved:hover { background: rgba(0, 200, 81, 0.3); }
+
+        .tmpl-actions {
+            display: flex;
+            gap: 10px;
+        }
+
+        .icon-btn {
+            background: none;
+            border: none;
+            cursor: pointer;
+            font-size: 14px;
+            filter: grayscale(100%);
+            opacity: 0.5;
+            transition: all 0.2s;
+        }
+
+        .icon-btn:hover {
+            filter: grayscale(0%);
+            opacity: 1;
+            transform: scale(1.2);
+        }
+    </style>
+</head>
+<body>
+
+    <div id="scene">
+        <div id="magic-ball">
+            <div class="face front">
+                <div class="eight-circle">8</div>
+            </div>
+            <div class="face back">
+                <div class="window">
+                    <div class="liquid">
+                        <div class="triangle">
+                            <div class="answer-text" id="answer"></div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+    
+    <div class="ui-container">
+        <div class="instruction">Click, hold, shake, and release.</div>
+        <button class="cog-btn" id="open-config">⚙️</button>
+    </div>
+
+    <div id="config-panel" onmousedown="event.stopPropagation();">
+        <div class="panel-header">
+            <h2>8-Ball Logic Board</h2>
+            <button class="close-btn" id="close-config">✖</button>
+        </div>
+        <div class="panel-content">
+            <div class="controls-row">
+                <button class="btn danger" onclick="clearAllInputs()">Clear All</button>
+                <button class="btn" onclick="restoreDefaults()">Reset Magic 8 Ball</button>
+            </div>
+            
+            <div class="input-grid" id="inputs-container">
+                </div>
+
+            <div class="templates-section">
+                <div class="templates-title">Saved Configurations</div>
+                <div class="templates-grid">
+                    <div class="template-slot">
+                        <div class="tmpl-number" id="tmpl-num-1" onclick="loadTemplate(1)" title="Load Settings">1</div>
+                        <div class="tmpl-actions">
+                            <button class="icon-btn" onclick="saveTemplate(1)" title="Save Current">💾</button>
+                            <button class="icon-btn" onclick="deleteTemplate(1)" title="Clear Saved">❌</button>
+                        </div>
+                    </div>
+                    <div class="template-slot">
+                        <div class="tmpl-number" id="tmpl-num-2" onclick="loadTemplate(2)" title="Load Settings">2</div>
+                        <div class="tmpl-actions">
+                            <button class="icon-btn" onclick="saveTemplate(2)" title="Save Current">💾</button>
+                            <button class="icon-btn" onclick="deleteTemplate(2)" title="Clear Saved">❌</button>
+                        </div>
+                    </div>
+                    <div class="template-slot">
+                        <div class="tmpl-number" id="tmpl-num-3" onclick="loadTemplate(3)" title="Load Settings">3</div>
+                        <div class="tmpl-actions">
+                            <button class="icon-btn" onclick="saveTemplate(3)" title="Save Current">💾</button>
+                            <button class="icon-btn" onclick="deleteTemplate(3)" title="Clear Saved">❌</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const ball = document.getElementById('magic-ball');
+        const answerEl = document.getElementById('answer');
+        const body = document.body;
+        const configPanel = document.getElementById('config-panel');
+        const inputsContainer = document.getElementById('inputs-container');
+
+        const sloshAudio = new Audio('https://8ball.jopp.io/media/slosh.mp3'); 
+        sloshAudio.loop = true; 
+        const tinkAudio = new Audio('https://8ball.jopp.io/media/tink.mp3');
+
+        const DEFAULT_ANSWERS = [
+            "It is certain", "It is decidedly so", "Without a doubt", "Yes definitely", 
+            "You may rely on it", "As I see it, yes", "Most likely", "Outlook good", 
+            "Yes", "Signs point to yes", "Reply hazy, try again", "Ask again later", 
+            "Better not tell you now", "Cannot predict now", "Concentrate and ask again", 
+            "Don't count on it", "My reply is no", "My sources say no", 
+            "Outlook not so good", "Very doubtful"
+        ];
+
+        let currentAnswers = [];
+
+        function formatForTriangle(text) {
+            if (!text.trim()) return "BLANK";
+            
+            const words = text.split(/\s+/);
+            if (words.length === 1) return words[0].substring(0, 25); 
+            
+            let lines = [];
+            let currentLine = words[0];
+            
+            for (let i = 1; i < words.length; i++) {
+                if (currentLine.length + 1 + words[i].length > 9 && lines.length < 2) {
+                    lines.push(currentLine);
+                    currentLine = words[i];
+                } else {
+                    currentLine += " " + words[i];
+                }
+            }
+            lines.push(currentLine);
+            return lines.slice(0, 3).join('\n');
+        }
+
+        function renderInputs() {
+            inputsContainer.innerHTML = '';
+            for (let i = 0; i < 20; i++) {
+                const input = document.createElement('input');
+                input.type = 'text';
+                input.className = 'input-box';
+                input.placeholder = `Option ${i + 1}`;
+                input.maxLength = 25; 
+                input.value = currentAnswers[i] || '';
+                
+                input.addEventListener('input', (e) => {
+                    currentAnswers[i] = e.target.value;
+                    saveCurrentState();
+                });
+                
+                inputsContainer.appendChild(input);
+            }
+            updateTemplateUI();
+        }
+
+        function saveCurrentState() {
+            localStorage.setItem('magic8_current', JSON.stringify(currentAnswers));
+        }
+
+        function loadCurrentState() {
+            const saved = localStorage.getItem('magic8_current');
+            if (saved) {
+                currentAnswers = JSON.parse(saved);
+                while(currentAnswers.length < 20) currentAnswers.push("");
+            } else {
+                currentAnswers = [...DEFAULT_ANSWERS];
+            }
+            renderInputs();
+        }
+
+        function clearAllInputs() {
+            currentAnswers = new Array(20).fill('');
+            renderInputs();
+            saveCurrentState();
+        }
+
+        function restoreDefaults() {
+            currentAnswers = [...DEFAULT_ANSWERS];
+            renderInputs();
+            saveCurrentState();
+        }
+
+        function saveTemplate(slotIndex) {
+            localStorage.setItem(`magic8_tmpl_${slotIndex}`, JSON.stringify(currentAnswers));
+            updateTemplateUI();
+        }
+
+        function loadTemplate(slotIndex) {
+            const data = localStorage.getItem(`magic8_tmpl_${slotIndex}`);
+            if (data) {
+                currentAnswers = JSON.parse(data);
+                renderInputs();
+                saveCurrentState();
+            }
+        }
+
+        function deleteTemplate(slotIndex) {
+            localStorage.removeItem(`magic8_tmpl_${slotIndex}`);
+            updateTemplateUI();
+        }
+
+        function updateTemplateUI() {
+            for (let i = 1; i <= 3; i++) {
+                const btn = document.getElementById(`tmpl-num-${i}`);
+                if (localStorage.getItem(`magic8_tmpl_${i}`)) {
+                    btn.classList.add('saved');
+                } else {
+                    btn.classList.remove('saved');
+                }
+            }
+        }
+
+        loadCurrentState();
+
+        document.getElementById('open-config').addEventListener('mousedown', (e) => {
+            e.stopPropagation(); 
+            configPanel.classList.add('open');
+        });
+
+        document.getElementById('close-config').addEventListener('click', () => {
+            configPanel.classList.remove('open');
+        });
+
+        let isDragging = false;
+        let startTime = 0;
+        let totalDistance = 0;
+        let lastX = 0;
+        let lastY = 0;
+
+        ball.addEventListener('mousedown', (e) => {
+            if (e.target.closest('#config-panel')) return;
+
+            isDragging = true;
+            startTime = Date.now();
+            totalDistance = 0;
+            lastX = e.clientX;
+            lastY = e.clientY;
+            
+            ball.classList.remove('flipped', 'revealed');
+            ball.classList.add('dragging');
+            body.classList.add('dragging');
+            
+            configPanel.classList.remove('open'); 
+            
+            sloshAudio.volume = 0; 
+            sloshAudio.play().catch(e => console.log("Audio play blocked until user interaction"));
+            
+            moveBall(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('mousemove', (e) => {
+            if (!isDragging) return;
+
+            const dx = e.clientX - lastX;
+            const dy = e.clientY - lastY;
+            const velocity = Math.hypot(dx, dy);
+            
+            totalDistance += velocity;
+
+            let dynamicVolume = Math.min(1, velocity / 40);
+            sloshAudio.volume = dynamicVolume;
+
+            lastX = e.clientX;
+            lastY = e.clientY;
+
+            moveBall(e.clientX, e.clientY);
+        });
+
+        window.addEventListener('mouseup', () => {
+            if (!isDragging) return;
+            isDragging = false;
+            
+            sloshAudio.pause();
+            
+            ball.classList.remove('dragging');
+            body.classList.add('dragging');
+
+            const endTime = Date.now();
+            const duration = endTime - startTime;
+
+            if (duration < 150 || totalDistance < 50) {
+                resetBallToCenter();
+                body.classList.remove('dragging');
+                return;
+            }
+
+            const validAnswers = currentAnswers.filter(a => a.trim() !== '');
+            const pool = validAnswers.length > 0 ? validAnswers : ["ASK", "ME", "LATER"];
+
+            const entropySeed = Math.floor(totalDistance * duration * (endTime % 1000));
+            const selectedIndex = entropySeed % pool.length;
+            
+            const rawAnswer = pool[selectedIndex];
+            const formattedText = formatForTriangle(rawAnswer);
+            answerEl.innerText = formattedText;
+
+            // --- REFINED TYPOGRAPHY ENGINE ---
+            // Only dynamic font-sizing remains. Positioning is locked perfectly by CSS.
+            const charCount = rawAnswer.length;
+            if (charCount <= 5) {
+                answerEl.style.fontSize = '14px';
+            } else if (charCount <= 12) {
+                answerEl.style.fontSize = '11px';
+            } else {
+                answerEl.style.fontSize = '9px';
+            }
+
+            resetBallToCenter();
+
+            setTimeout(() => {
+                ball.classList.add('flipped');
+                
+                setTimeout(() => {
+                    ball.classList.add('revealed');
+                    body.classList.remove('dragging');
+
+                    setTimeout(() => {
+                        tinkAudio.currentTime = 0; 
+                        tinkAudio.play();
+                    }, 2400); 
+
+                }, 800); 
+
+            }, 500); 
+        });
+
+        function moveBall(x, y) {
+            ball.style.left = x + 'px';
+            ball.style.top = y + 'px';
+        }
+
+        function resetBallToCenter() {
+            ball.style.left = '50%';
+            ball.style.top = '50%';
+        }
+    </script>
+</body>
+</html>
