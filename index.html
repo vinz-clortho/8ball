@@ -2,12 +2,14 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>Tactile Magic 8-Ball</title>
     <style>
         :root {
+            /* The ball naturally fits on screens as narrow as 320px */
             --ball-size: 300px;
             --bg-color: #0d1117;
+            --panel-width: min(350px, 100vw); /* Responsive panel width */
             --panel-bg: rgba(13, 17, 23, 0.95);
             --accent: #4a86e8;
         }
@@ -19,8 +21,12 @@
             background-image: radial-gradient(circle at 50% 50%, #1a2332 0%, #000 100%);
             font-family: 'Courier New', Courier, monospace;
             height: 100vh;
+            /* CRITICAL: Prevents pull-to-refresh and native scrolling on mobile */
+            touch-action: none; 
             cursor: grab;
             color: white;
+            /* Prevent double-tap zooming on iOS */
+            -webkit-text-size-adjust: 100%;
         }
 
         body.dragging {
@@ -135,11 +141,11 @@
         }
 
         .triangle {
-            width: 120px; /* Slightly wider for the absolute positioned text */
+            width: 120px; 
             height: 120px; 
             background-color: #1c4587;
             clip-path: polygon(50% 0%, 0% 100%, 100% 100%);
-            position: relative; /* Key change: Allow absolute positioning of children */
+            position: relative; 
             box-shadow: inset 0 0 20px #4a86e8;
             filter: drop-shadow(0 0 10px #1155cc);
         }
@@ -155,12 +161,11 @@
             transition: opacity 1s ease-in 1.5s; 
             word-wrap: break-word;
             
-            /* --- THE CENTROID FIX --- */
             position: absolute;
-            top: 66%; /* Geometric center of mass for a triangle */
+            top: 66%; 
             left: 50%;
-            transform: translate(-50%, -50%); /* Pins the exact center of the text block to the top/left coordinates */
-            margin: 0; /* Clear all old margins */
+            transform: translate(-50%, -50%); 
+            margin: 0; 
         }
 
         #magic-ball.revealed .answer-text {
@@ -176,12 +181,17 @@
             justify-content: center;
             align-items: center;
             pointer-events: none;
+            padding: 0 20px;
+            box-sizing: border-box;
+            z-index: 50;
         }
 
         .instruction {
             color: rgba(255,255,255,0.3);
             user-select: none;
             margin-right: 15px;
+            text-align: center;
+            font-size: 14px;
         }
 
         .cog-btn {
@@ -189,9 +199,10 @@
             background: none;
             border: none;
             color: rgba(255,255,255,0.5);
-            font-size: 24px;
+            font-size: 28px; /* Slightly larger for touch targets */
             cursor: pointer;
             transition: color 0.3s, transform 0.5s ease;
+            padding: 10px; /* Bigger tap area */
         }
 
         .cog-btn:hover {
@@ -203,8 +214,8 @@
         #config-panel {
             position: absolute;
             top: 0;
-            right: -350px;
-            width: 350px;
+            right: calc(var(--panel-width) * -1); /* Hides completely off screen */
+            width: var(--panel-width);
             height: 100vh;
             background: var(--panel-bg);
             border-left: 1px solid #333;
@@ -241,8 +252,9 @@
             background: none;
             border: none;
             color: #aaa;
-            font-size: 20px;
+            font-size: 24px;
             cursor: pointer;
+            padding: 5px 10px;
         }
 
         .panel-content {
@@ -266,7 +278,7 @@
             background: #111;
             border: 1px solid #333;
             color: #fff;
-            padding: 8px;
+            padding: 10px 8px; /* Slightly taller for mobile tap targets */
             border-radius: 4px;
             font-size: 12px;
             text-align: center;
@@ -287,7 +299,7 @@
 
         .btn {
             flex: 1;
-            padding: 10px;
+            padding: 12px 10px; /* Taller for touch */
             background: #222;
             color: #fff;
             border: 1px solid #444;
@@ -303,6 +315,7 @@
         .templates-section {
             border-top: 1px solid #333;
             padding-top: 20px;
+            padding-bottom: 30px; /* Safe area for bottom of phones */
         }
 
         .templates-title {
@@ -322,12 +335,12 @@
             display: flex;
             flex-direction: column;
             align-items: center;
-            gap: 8px;
+            gap: 12px;
         }
 
         .tmpl-number {
-            width: 40px;
-            height: 40px;
+            width: 45px;
+            height: 45px;
             border-radius: 50%;
             display: flex;
             align-items: center;
@@ -347,27 +360,33 @@
             background: rgba(0, 200, 81, 0.1);
         }
 
-        .tmpl-number.saved:hover { background: rgba(0, 200, 81, 0.3); }
-
         .tmpl-actions {
             display: flex;
-            gap: 10px;
+            gap: 15px; /* Wider gap for fat fingers */
         }
 
         .icon-btn {
             background: none;
             border: none;
             cursor: pointer;
-            font-size: 14px;
+            font-size: 16px;
             filter: grayscale(100%);
             opacity: 0.5;
             transition: all 0.2s;
+            padding: 5px;
         }
 
         .icon-btn:hover {
             filter: grayscale(0%);
             opacity: 1;
             transform: scale(1.2);
+        }
+
+        /* --- MOBILE TWEAKS --- */
+        @media (max-width: 380px) {
+            .instruction { font-size: 12px; }
+            .input-box { font-size: 10px; }
+            .btn { font-size: 11px; }
         }
     </style>
 </head>
@@ -391,11 +410,11 @@
     </div>
     
     <div class="ui-container">
-        <div class="instruction">Click, hold, shake, and release.</div>
-        <button class="cog-btn" id="open-config">⚙️</button>
+        <div class="instruction">Tap, hold, shake, and release.</div>
+        <button class="cog-btn" id="open-config" title="Settings">⚙️</button>
     </div>
 
-    <div id="config-panel" onmousedown="event.stopPropagation();">
+    <div id="config-panel">
         <div class="panel-header">
             <h2>8-Ball Logic Board</h2>
             <button class="close-btn" id="close-config">✖</button>
@@ -406,31 +425,30 @@
                 <button class="btn" onclick="restoreDefaults()">Reset Magic 8 Ball</button>
             </div>
             
-            <div class="input-grid" id="inputs-container">
-                </div>
+            <div class="input-grid" id="inputs-container"></div>
 
             <div class="templates-section">
                 <div class="templates-title">Saved Configurations</div>
                 <div class="templates-grid">
                     <div class="template-slot">
-                        <div class="tmpl-number" id="tmpl-num-1" onclick="loadTemplate(1)" title="Load Settings">1</div>
+                        <div class="tmpl-number" id="tmpl-num-1" onclick="loadTemplate(1)">1</div>
                         <div class="tmpl-actions">
-                            <button class="icon-btn" onclick="saveTemplate(1)" title="Save Current">💾</button>
-                            <button class="icon-btn" onclick="deleteTemplate(1)" title="Clear Saved">❌</button>
+                            <button class="icon-btn" onclick="saveTemplate(1)">💾</button>
+                            <button class="icon-btn" onclick="deleteTemplate(1)">❌</button>
                         </div>
                     </div>
                     <div class="template-slot">
-                        <div class="tmpl-number" id="tmpl-num-2" onclick="loadTemplate(2)" title="Load Settings">2</div>
+                        <div class="tmpl-number" id="tmpl-num-2" onclick="loadTemplate(2)">2</div>
                         <div class="tmpl-actions">
-                            <button class="icon-btn" onclick="saveTemplate(2)" title="Save Current">💾</button>
-                            <button class="icon-btn" onclick="deleteTemplate(2)" title="Clear Saved">❌</button>
+                            <button class="icon-btn" onclick="saveTemplate(2)">💾</button>
+                            <button class="icon-btn" onclick="deleteTemplate(2)">❌</button>
                         </div>
                     </div>
                     <div class="template-slot">
-                        <div class="tmpl-number" id="tmpl-num-3" onclick="loadTemplate(3)" title="Load Settings">3</div>
+                        <div class="tmpl-number" id="tmpl-num-3" onclick="loadTemplate(3)">3</div>
                         <div class="tmpl-actions">
-                            <button class="icon-btn" onclick="saveTemplate(3)" title="Save Current">💾</button>
-                            <button class="icon-btn" onclick="deleteTemplate(3)" title="Clear Saved">❌</button>
+                            <button class="icon-btn" onclick="saveTemplate(3)">💾</button>
+                            <button class="icon-btn" onclick="deleteTemplate(3)">❌</button>
                         </div>
                     </div>
                 </div>
@@ -445,6 +463,7 @@
         const configPanel = document.getElementById('config-panel');
         const inputsContainer = document.getElementById('inputs-container');
 
+        // IMPORTANT: Use relative paths for GitHub Pages
         const sloshAudio = new Audio('./media/slosh.mp3'); 
         sloshAudio.loop = true; 
         const tinkAudio = new Audio('./media/tink.mp3');
@@ -560,7 +579,12 @@
 
         loadCurrentState();
 
-        document.getElementById('open-config').addEventListener('mousedown', (e) => {
+        // --- Panel Interaction ---
+        // Need to stop propagation so clicking the panel doesn't trigger the ball
+        configPanel.addEventListener('mousedown', e => e.stopPropagation());
+        configPanel.addEventListener('touchstart', e => e.stopPropagation(), {passive: true});
+
+        document.getElementById('open-config').addEventListener('click', (e) => {
             e.stopPropagation(); 
             configPanel.classList.add('open');
         });
@@ -569,20 +593,23 @@
             configPanel.classList.remove('open');
         });
 
+        // --- PHYSICS AND DRAG ENGINE (UNIFIED MOUSE + TOUCH) ---
         let isDragging = false;
         let startTime = 0;
         let totalDistance = 0;
         let lastX = 0;
         let lastY = 0;
 
-        ball.addEventListener('mousedown', (e) => {
-            if (e.target.closest('#config-panel')) return;
+        function handleStart(e) {
+            if (e.target.closest('#config-panel') || e.target.closest('.ui-container')) return;
 
             isDragging = true;
             startTime = Date.now();
             totalDistance = 0;
-            lastX = e.clientX;
-            lastY = e.clientY;
+            
+            // Normalize coordinate data between Mouse and Touch events
+            lastX = e.touches ? e.touches[0].clientX : e.clientX;
+            lastY = e.touches ? e.touches[0].clientY : e.clientY;
             
             ball.classList.remove('flipped', 'revealed');
             ball.classList.add('dragging');
@@ -591,16 +618,19 @@
             configPanel.classList.remove('open'); 
             
             sloshAudio.volume = 0; 
-            sloshAudio.play().catch(e => console.log("Audio play blocked until user interaction"));
+            sloshAudio.play().catch(err => console.log("Audio block: user interaction needed"));
             
-            moveBall(e.clientX, e.clientY);
-        });
+            moveBall(lastX, lastY);
+        }
 
-        window.addEventListener('mousemove', (e) => {
+        function handleMove(e) {
             if (!isDragging) return;
 
-            const dx = e.clientX - lastX;
-            const dy = e.clientY - lastY;
+            const currentX = e.touches ? e.touches[0].clientX : e.clientX;
+            const currentY = e.touches ? e.touches[0].clientY : e.clientY;
+
+            const dx = currentX - lastX;
+            const dy = currentY - lastY;
             const velocity = Math.hypot(dx, dy);
             
             totalDistance += velocity;
@@ -608,13 +638,13 @@
             let dynamicVolume = Math.min(1, velocity / 40);
             sloshAudio.volume = dynamicVolume;
 
-            lastX = e.clientX;
-            lastY = e.clientY;
+            lastX = currentX;
+            lastY = currentY;
 
-            moveBall(e.clientX, e.clientY);
-        });
+            moveBall(currentX, currentY);
+        }
 
-        window.addEventListener('mouseup', () => {
+        function handleEnd() {
             if (!isDragging) return;
             isDragging = false;
             
@@ -642,8 +672,6 @@
             const formattedText = formatForTriangle(rawAnswer);
             answerEl.innerText = formattedText;
 
-            // --- REFINED TYPOGRAPHY ENGINE ---
-            // Only dynamic font-sizing remains. Positioning is locked perfectly by CSS.
             const charCount = rawAnswer.length;
             if (charCount <= 5) {
                 answerEl.style.fontSize = '14px';
@@ -670,7 +698,17 @@
                 }, 800); 
 
             }, 500); 
-        });
+        }
+
+        // Attach Mouse Events
+        ball.addEventListener('mousedown', handleStart);
+        window.addEventListener('mousemove', handleMove);
+        window.addEventListener('mouseup', handleEnd);
+
+        // Attach Touch Events (passive: false is necessary to prevent default browser behaviors if needed)
+        ball.addEventListener('touchstart', handleStart, { passive: false });
+        window.addEventListener('touchmove', handleMove, { passive: false });
+        window.addEventListener('touchend', handleEnd);
 
         function moveBall(x, y) {
             ball.style.left = x + 'px';
